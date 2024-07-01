@@ -6,7 +6,6 @@ flask
 flask-socketio
 imageio
 isort
-py-cord
 pyyaml
 pyzipper
 requests

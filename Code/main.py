@@ -9,19 +9,19 @@ import sys
 import webbrowser
 
 from auto_updater import needs_update
-from bot import bot_start
 from colorlog import ColoredFormatter
 from db_work import SettingsManager
 from flask import Flask
-from py_html import main_bp, socketio
-from py_html.api import api_bp, handle_show_popup, shutdown_start
+from html_code import api_bp, html_error_bp
+from html_code.api import handle_show_popup, shutdown_start
+from html_code.socketio_regester import socketio
 
 app = Flask(__name__)
 
 socketio.init_app(app)
 
 # Blueprint
-app.register_blueprint(main_bp, url_prefix='/')
+app.register_blueprint(html_error_bp, url_prefix='/error')
 app.register_blueprint(api_bp, url_prefix='/api')
 
 # Argument parsing
@@ -32,9 +32,7 @@ def parse_arguments():
 
 # Async helper function
 async def async_main_bg_task():
-    if await SettingsManager().get_setting("bot.auto_start"):
-        await SettingsManager().set_setting("bot.is_run", False)
-        await bot_start()
+    pass
 
 # Background task function
 def main_bg_task():

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    {% include 'base_modules/head_ru.html' %}
+    <title>Настройки</title>
+
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='/css/collapsible.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='/css/popup.css') }}">
+</head>
+
+<body>
+    {% include 'base_modules/navigation.html' %}
+
+    <button class="collapsible">Автоматические обновления</button>
+    <div class="collapsible-content">
+        Текущая версия приложения: <span id="appCurentVersion">???</span><br>
+        Версия приложения на репозитории: <span id="appLatestVersion">???</span>
+        <br><br>
+            <label for="autoUpdateVersion">
+                <input type="checkbox" id="autoUpdateVersion" name="autoUpdateVersion" onchange="saveAutoUpdateSetting()">
+                Автоматические обновления программы при запуске (необходимо перезапустить приложение)
+            </label>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/popup.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/collapsible.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/settings/main.js') }}"></script>
+    {% include 'base_modules/footer.html' %}
+</body>
+
+</html>
