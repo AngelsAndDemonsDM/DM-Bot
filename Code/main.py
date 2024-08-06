@@ -13,7 +13,8 @@ from quart import Quart
 from quart.logging import default_handler
 from systems.auto_updater import AutoUpdater
 from systems.db_systems import load_config
-from systems.events_system import register_events
+from systems.entity_system import EntityFactory
+from systems.events_system import EventManager
 
 http_server = Quart(__name__)
 http_server.logger.removeHandler(default_handler)
@@ -32,7 +33,7 @@ def parse_arguments():
     return parser.parse_args()
 
 # Function to run a file in a new console
-def run_file_in_new_console(file_path):
+def run_file_in_new_console(file_path) -> None:
     absolute_path = os.path.abspath(file_path)
     system = platform.system()
     
@@ -45,9 +46,16 @@ def run_file_in_new_console(file_path):
     else:
         subprocess.Popen(["x-terminal-emulator", "-e", f"python {absolute_path}"])
 
-async def main():
-    register_events()
+def register_all() -> None:
+    logging.info("EntityFactory starting work")
+    ent_factory = EntityFactory()
+    logging.info("EntityFactory finished work")
     
+    logging.info("EventManager starting work")
+    ev_manager = EventManager()
+    logging.info("EventManager finished work")
+
+async def main() -> None:
     host, port, socket_port, auto_update = load_config()
 
     if auto_update:
@@ -100,6 +108,8 @@ if __name__ == "__main__":
             'handlers': ['default'],
         },
     })
+    
+    register_all()
     
     try:
         asyncio.run(main())

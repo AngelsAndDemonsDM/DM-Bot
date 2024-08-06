@@ -1,6 +1,8 @@
 import importlib
-import os
+import importlib.util
+import logging
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
 import yaml
@@ -9,12 +11,10 @@ from systems.entity_system.base_component import BaseComponent
 from systems.entity_system.base_entity import BaseEntity
 from systems.misc import GlobalClass
 
+logger = logging.getLogger("Entity Factory")
 
 class EntityFactory(GlobalClass):
-    __slots__ = [
-        '_entity_registry', '_component_registry', 
-        '_entities', '_uid_dict', '_next_uid'
-    ]
+    __slots__ = [ '_initialized', '_entity_registry', '_component_registry', '_entities', '_uid_dict', '_next_uid' ]
 
     def __init__(self):
         if not hasattr(self, '_initialized'):
@@ -24,54 +24,62 @@ class EntityFactory(GlobalClass):
             self._entities: Dict[str, BaseEntity] = {}
             self._uid_dict: Dict[int, BaseEntity] = {}
             self._next_uid: int = 1
-            self._register_from_yaml()
-            self.load_entities_from_directory(os.path.join(ROOT_PATH, "Prototype"))
+            
+            self._register_classes()
+            self.load_entities_from_directory(Path(ROOT_PATH) / "Prototype")
 
-    def _register_entity(self, entity_type: str, entity_class: Type[BaseEntity]) -> None:
-        """Регистрация класса сущности.
+    def _register_classes(self) -> None:
+        """Регистрация классов сущностей и компонентов из файлов в директориях."""
+        self._auto_register_from_directory(Path(ROOT_PATH) / "Code" / "systems", 'Entity')
+        self._auto_register_from_directory(Path(ROOT_PATH) / "Code" / "systems", 'Component')
+
+    def _auto_register_from_directory(self, directory: Path, suffix: str) -> None:
+        """Автоматическая регистрация классов из указанной директории.
 
         Args:
-            entity_type (str): Тип сущности.
-            entity_class (Type[BaseEntity]): Класс сущности.
+            directory (Path): Директория для сканирования.
+            suffix (str): Суффикс для фильтрации классов.
         """
-        self._entity_registry[entity_type] = entity_class
+        for file_path in directory.rglob("*.py"):
+            module_name = file_path.stem
+            if module_name == "__init__":
+                continue
 
-    def _register_component(self, component_type: str, component_class: Type[BaseComponent]) -> None:
-        """Регистрация класса компонента.
+            module = self._import_module_from_file(module_name, file_path)
+            for name in dir(module):
+                cls = getattr(module, name)
+                if isinstance(cls, type) and name.endswith(suffix) and not self._is_base_class(cls, suffix):
+                    if suffix == 'Entity' and issubclass(cls, BaseEntity):
+                        if name not in self._entity_registry:
+                            logger.info(f"Registering entity class '{cls.__name__}'")
+                            self._entity_registry[name] = cls
+                    
+                    elif suffix == 'Component' and issubclass(cls, BaseComponent):
+                        if name not in self._component_registry:
+                            logger.info(f"Registering component class '{cls.__name__}'")
+                            self._component_registry[name] = cls
+
+    def _is_base_class(self, cls, suffix: str) -> bool:
+        """Проверка, является ли класс базовым.
 
         Args:
-            component_type (str): Тип компонента.
-            component_class (Type[BaseComponent]): Класс компонента.
-        """
-        self._component_registry[component_type] = component_class
-
-    def _import_class(self, full_class_string: str) -> Any:
-        """Импорт класса по строковому представлению.
-
-        Args:
-            full_class_string (str): Полное строковое представление класса.
+            cls: Класс для проверки.
+            suffix (str): Суффикс для фильтрации классов.
 
         Returns:
-            Any: Импортированный класс.
+            bool: True, если класс является базовым, иначе False.
         """
-        module_path, class_name = full_class_string.rsplit('.', 1)
-        module = importlib.import_module(module_path)
-        cls = getattr(module, class_name)
-        return cls
+        if suffix == 'Entity':
+            return cls is BaseEntity
+        elif suffix == 'Component':
+            return cls is BaseComponent
+        return False
 
-    def _register_from_yaml(self) -> None:
-        """Регистрация сущностей и компонентов из YAML файла.
-        """
-        with open(os.path.join(ROOT_PATH, "Prototype", "factory_mappings.yml"), 'r', encoding="UTF-8") as file:
-            data = yaml.safe_load(file)
-
-        for entity_type, full_class_string in data.get('entities', {}).items():
-            entity_class = self._import_class(full_class_string)
-            self._register_entity(entity_type, entity_class)
-
-        for component_type, full_class_string in data.get('components', {}).items():
-            component_class = self._import_class(full_class_string)
-            self._register_component(component_type, component_class)
+    def _import_module_from_file(self, module_name, file_path):
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     def _create_entity(self, entity_data: Dict[str, Any]) -> BaseEntity:
         """Создание сущности по данным из словаря.
@@ -120,7 +128,7 @@ class EntityFactory(GlobalClass):
             BaseComponent: Созданный компонент.
         """
         from systems.map_system.coordinate import Coordinate
-        
+
         component_type = component_data.pop('type')
         component_class = self._component_registry.get(component_type)
         if not component_class:
@@ -130,38 +138,35 @@ class EntityFactory(GlobalClass):
         for key, expected_type in type_hints.items():
             if key == 'coordinates':
                 component_data[key] = [Coordinate.from_dict(coord) for coord in component_data[key]]
-            
+
             if key in component_data and not isinstance(component_data[key], expected_type):
                 raise TypeError(f"Expected {key} to be {expected_type} but got {type(component_data[key])}")
 
         return component_class(**component_data)
 
-    def load_entities_from_yaml(self, file_path: str) -> List[BaseEntity]:
+    def load_entities_from_yaml(self, file_path: Path) -> List[BaseEntity]:
         """Загрузка сущностей из YAML файла.
 
         Args:
-            file_path (str): Путь к YAML файлу.
+            file_path (Path): Путь к YAML файлу.
 
         Returns:
             List[BaseEntity]: Список загруженных сущностей.
         """
-        with open(file_path, 'r', encoding="UTF-8") as file:
+        with file_path.open('r', encoding="UTF-8") as file:
             data = yaml.safe_load(file)
 
         return [self._create_entity(entity_data) for entity_data in data]
 
-    def load_entities_from_directory(self, directory_path: str) -> None:
+    def load_entities_from_directory(self, directory_path: Path) -> None:
         """Загрузка сущностей из всех YAML файлов в директории.
 
         Args:
-            directory_path (str): Путь к директории.
+            directory_path (Path): Путь к директории.
         """
         self._entities.clear()
-        for root, _, files in os.walk(directory_path):
-            for file in files:
-                if file.endswith(('.yaml', '.yml')) and file != "factory_mappings.yml":
-                    file_path = os.path.join(root, file)
-                    self._entities.update({f"{entity.type}_{entity.id}": entity for entity in self.load_entities_from_yaml(file_path)})
+        for file_path in directory_path.rglob("*.yml"):
+            self._entities.update({f"{entity.type}_{entity.id}": entity for entity in self.load_entities_from_yaml(file_path)})
 
     def _generate_uid(self) -> int:
         """Генерация уникального идентификатора (UID).
@@ -202,3 +207,16 @@ class EntityFactory(GlobalClass):
             Optional[BaseEntity]: Сущность, если найдена, иначе None.
         """
         return self._uid_dict.get(uid, None)
+
+    def update_object_uid(self, obj: BaseEntity) -> None:
+        """Метод для перерегестрации объекта.
+        Необходимо для корректной загрузки карты, чтобы не было мёртвых душ
+
+        Args:
+            obj (BaseEntity): Объект для перерегестрации
+        """
+        if self._uid_dict.get(obj.uid) is obj:
+            return
+        
+        obj.uid = self._generate_uid()
+        self._uid_dict[obj.uid] = obj
