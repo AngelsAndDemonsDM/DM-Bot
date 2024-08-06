@@ -14,7 +14,7 @@ from systems.misc import GlobalClass
 logger = logging.getLogger("Entity Factory")
 
 class EntityFactory(GlobalClass):
-    __slots__ = [ '_initialized', '_entity_registry', '_component_registry', '_entities', '_uid_dict', '_next_uid' ]
+    __slots__ = ['_initialized', '_entity_registry', '_component_registry', '_entities', '_uid_dict', '_next_uid']
 
     def __init__(self):
         if not hasattr(self, '_initialized'):
@@ -24,7 +24,7 @@ class EntityFactory(GlobalClass):
             self._entities: Dict[str, BaseEntity] = {}
             self._uid_dict: Dict[int, BaseEntity] = {}
             self._next_uid: int = 1
-            
+
             self._register_classes()
             self.load_entities_from_directory(Path(ROOT_PATH) / "Prototype")
 
@@ -53,7 +53,6 @@ class EntityFactory(GlobalClass):
                         if name not in self._entity_registry:
                             logger.info(f"Registering entity class '{cls.__name__}'")
                             self._entity_registry[name] = cls
-                    
                     elif suffix == 'Component' and issubclass(cls, BaseComponent):
                         if name not in self._component_registry:
                             logger.info(f"Registering component class '{cls.__name__}'")
@@ -156,6 +155,9 @@ class EntityFactory(GlobalClass):
         with file_path.open('r', encoding="UTF-8") as file:
             data = yaml.safe_load(file)
 
+        if not data:
+            return []
+        
         return [self._create_entity(entity_data) for entity_data in data]
 
     def load_entities_from_directory(self, directory_path: Path) -> None:
@@ -165,8 +167,21 @@ class EntityFactory(GlobalClass):
             directory_path (Path): Путь к директории.
         """
         self._entities.clear()
-        for file_path in directory_path.rglob("*.yml"):
-            self._entities.update({f"{entity.type}_{entity.id}": entity for entity in self.load_entities_from_yaml(file_path)})
+        yaml_files = list(directory_path.rglob("*.yml"))
+
+        if not yaml_files:
+            logger.warn(f"No YAML files found in the directory: {directory_path}")
+            return
+
+        entity_count = 0
+        for file_path in yaml_files:
+            entities = self.load_entities_from_yaml(file_path)
+            if entities:
+                self._entities.update({f"{entity.type}_{entity.id}": entity for entity in entities})
+                entity_count += len(entities)
+
+        if entity_count == 0:
+            logger.warn(f"No valid entities found in any YAML files in the directory: {directory_path}")
 
     def _generate_uid(self) -> int:
         """Генерация уникального идентификатора (UID).
@@ -194,7 +209,7 @@ class EntityFactory(GlobalClass):
             copy_entity.uid = self._generate_uid()
             self._uid_dict[copy_entity.uid] = copy_entity
             return copy_entity
-        
+
         return None
 
     def get_entity_by_uid(self, uid: int) -> Optional[BaseEntity]:
@@ -217,6 +232,6 @@ class EntityFactory(GlobalClass):
         """
         if self._uid_dict.get(obj.uid) is obj:
             return
-        
+
         obj.uid = self._generate_uid()
         self._uid_dict[obj.uid] = obj
