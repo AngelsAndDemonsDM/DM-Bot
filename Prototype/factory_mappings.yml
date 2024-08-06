@@ -1,16 +1,3 @@
-# Этот файл используется для регистрации классов сущностей и компонентов,
-
-# Раздел для регистрации классов сущностей
-entities:
-  MapEntity: "systems.map_system.map_entity.MapEntity"
-
-# Раздел для регистрации классов компонентов
-components:
-  MapPhysicsComponent: "systems.map_system.components.map_physics_component.MapPhysicsComponent"
-  MapCoordinatesComponent: "systems.map_system.components.map_coordinates_component.MapCoordinatesComponent"
-  ShapeComponent: "systems.map_system.components.shape_component.ShapeComponent"
-  ControlPlayerComponent: "systems.player_system.control_player_component.ControlPlayerComponent"
-
 # Пример определения экземпляров сущностей В ДРУГИХ YML ФАЙЛАХ:
 # - type: "PlayerEntity"  # Указываем тип сущности, который соответствует зарегистрированному имени класса
 #   id: "1"  # Уникальный идентификатор сущности, обязательное поле
