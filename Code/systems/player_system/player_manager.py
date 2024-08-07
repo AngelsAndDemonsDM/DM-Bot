@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from systems.entity_system import BaseEntity
 from systems.misc import GlobalClass
@@ -45,5 +45,5 @@ class PlayerManager(GlobalClass):
             
             self._player_dict[login] = new_player_entities
 
-    def get_player_entitys(self, login: str) -> List[BaseEntity]:
-        pass
+    def get_player_entitys(self, login: str) -> Optional[List[BaseEntity]]:
+        return self._player_dict.get(login, None)
